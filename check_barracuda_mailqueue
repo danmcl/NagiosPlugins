@@ -1,0 +1,164 @@
+#!/usr/bin/perl -T
+# Author : Daniel McLaughlin (dan.mcl@gmail.com)
+# Date : 06/12/2011
+# check_barracuda_mailqueue
+#
+# Copyright (c) 2011 Daniel McLaughlin
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy of this software
+# and associated documentation files (the "Software"), to deal in the Software without restriction,
+# including without limitation the rights to use, copy, modify, merge, publish, distribute,
+# sublicense, and/or sell copies of the Software, and to permit persons to whom the Software 
+# is furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+# INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE
+# AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+# DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+#
+# 
+####################################################################################################
+
+# global variables:
+use vars qw($opt_h $opt_H $opt_c $opt_W $opt_C);
+use Getopt::Std;
+&getopts("h:H:c:W:C:")||die "ERROR: No options submitted. -help for help\n";
+if ($opt_h) { 
+    &print_usage;
+   }
+$ENV{'PATH'} =~ /(.*)/; $ENV{'PATH'} = $1;
+sub print_usage {
+    print "check_barracuda_mailqueue -H [ IP|HOSTNAME ] -c SNMPCOMMUNITY -W Warning number of mail messages -C Critical number of mail messages";
+    exit $STATE_UNKNOWN;
+}
+
+$PROGNAME = "check_barracuda_mailqueue";
+
+#UNTATINTING STATE VARIABLES
+
+$STATE_CRITICAL = 2;
+if ($STATE_CRITICAL =~ /^([-\@\w.]+)$/) {
+        $STATE_CRITICAL = $1;                     # $data now untainted
+    } else {
+        die "Bad data in '$STATE_CRITICAL'";      # log this somewhere
+    }
+$STATE_WARNING = 1;
+if ($STATE_WARNING =~ /^([-\@\w.]+)$/) {
+        $STATE_WARNING = $1;                     # $data now untainted
+    } else {
+        die "Bad data in '$STATE_WARNING'";      # log this somewhere
+    }
+$STATE_UNKNOWN = 3;
+if ($STATE_UNKNOWN =~ /^([-\@\w.]+)$/) {
+        $STATE_UNKNOWN = $1;                     # $data now untainted
+    } else {
+        die "Bad data in '$STATE_UNKNOWN'";      # log this somewhere
+    }
+$STATE_OK = 0;
+if ($STATE_OK =~ /^([-\@\w.]+)$/) {
+        $STATE_OK = $1;                     # $data now untainted
+    } else {
+        die "Bad data in '$STATE_OK'";      # log this somewhere
+    }
+    
+#UNTAINTING USER VARIABLES
+
+$COMMUNITY = $opt_c;
+if ($COMMUNITY =~ /^([-\@\w.]+)$/) {
+        $COMMUNITY = $1;                     # $data now untainted
+    } else {
+        die "Bad data in '$COMMUNITY'";      # log this somewhere
+    }
+
+$IP = $opt_H;
+if ($IP =~ /^([-\@\w.]+)$/) {
+        $IP = $1;                     # $data now untainted
+    } else {
+        die "Bad data in '$IP'";      # log this somewhere
+    }
+    
+$warning = $opt_W;
+if ($warning =~ /^([-\@\w.]+)$/) {
+        $warning = $1;                     # $data now untainted
+    } else {
+        die "Bad data in '$warning'";      # log this somewhere
+    }
+    
+$critical = $opt_C;
+if ($critical =~ /^([-\@\w.]+)$/) {
+        $critical = $1;                     # $data now untainted
+    } else {
+        die "Bad data in '$critical'";      # log this somewhere
+    }
+
+# CPU Fan Speed Get and Untaint.
+$queue_in=`snmpwalk -v 2c -c $COMMUNITY $IP 1.3.6.1.4.1.20632.2.2`;
+if ($queue_in =~ m/(.*)/) {
+        $queue_in = $1;                     # $data now untainted
+    } else {
+        die "Bad data in '$queue_in'";      # log this somewhere
+    }
+chomp $queue_in;
+
+$queue_out=`snmpwalk -v 2c -c $COMMUNITY $IP 1.3.6.1.4.1.20632.2.3`;
+if ($queue_out =~ m/(.*)/) {
+        $queue_out = $1;                     # $data now untainted
+    } else {
+        die "Bad data in '$queue_out'";      # log this somewhere
+    }
+chomp $queue_out;
+
+$queue_deferred=`snmpwalk -v 2c -c $COMMUNITY $IP 1.3.6.1.4.1.20632.2.4`;
+if ($queue_deferred =~ m/(.*)/) {
+        $queue_deferred = $1;                     # $data now untainted
+    } else {
+        die "Bad data in '$queue_deferred'";      # log this somewhere
+    }
+chomp $queue_deferred;
+
+@cputemp_arr = split(' ',$cputemp);
+$realcputemp = $cputemp_arr[-1];
+$realcputemp =~ s/^"(.*)"$/$1/; 
+
+# FILTER
+if ( $queue_in ) {
+     $queue_in =~s/SNMPv2-SMI::enterprises.20632.2.2 = INTEGER: //g;
+   }
+else {
+    print "Unknown  : No response while querying for the mail queue in on host $IP\n";
+    exit $STATE_UNKNOWN;
+}
+if ( $queue_out ) {
+     $queue_out =~s/SNMPv2-SMI::enterprises.20632.2.3 = INTEGER: //g;
+   }
+else {
+    print "Unknown  : No response while querying for the mail queue out on host $IP\n";
+    exit $STATE_UNKNOWN;
+}
+if ( $queue_deferred ) {
+     $queue_deferred =~s/SNMPv2-SMI::enterprises.20632.2.4 = INTEGER: //g;
+   }
+else {
+    print "Unknown  : No response while querying for the deferred mail queue on host $IP\n";
+    exit $STATE_UNKNOWN;
+}
+
+
+$OUTPUT="mailqueue in: $queue_in - mailqueue out: $queue_out - mailqueue deferred: $queue_deferred|MQ_IN=$queue_in MQ_OUT=$queue_out MQ_DEF=$queue_deferred";
+
+if ( $queue_in >= $critical or $queue_out >= $critical or $queue_deferred >= $critical ) {
+    print "Status is CRITICAL. $OUTPUT\n";
+    exit $STATE_CRITICAL;
+   }
+if ( $queue_in >= $warning or $queue_out >= $warning or $queue_deferred >= $ warning ) {
+    print "Status is WARNING. $OUTPUT\n";
+    exit $STATE_WARNING;
+   }
+else {
+    print "Status is OK. $OUTPUT\n";
+    exit $STATE_OK;
+    }

@@ -1,0 +1,168 @@
+#!/usr/bin/perl -T
+# Author : Daniel McLaughlin (dan.mcl@gmail.com)
+# Date : 06/12/2011
+# check_barracuda_fans
+#
+# Copyright (c) 2011 Daniel McLaughlin
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy of this software
+# and associated documentation files (the "Software"), to deal in the Software without restriction,
+# including without limitation the rights to use, copy, modify, merge, publish, distribute,
+# sublicense, and/or sell copies of the Software, and to permit persons to whom the Software 
+# is furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+# INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE
+# AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+# DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+#
+# 
+####################################################################################################
+
+# globale variabelen:
+use vars qw($opt_h $opt_H $opt_y $opt_w $opt_c $opt_W $opt_C );
+use Getopt::Std;
+&getopts("h:H:y:w:c:W:C:")||die "ERROR: No options submitted. -help for help\n";
+if ($opt_h) { 
+    &print_usage;
+   }
+$ENV{'PATH'} =~ /(.*)/; $ENV{'PATH'} = $1;
+sub print_usage {
+    print "check_barracuda_fans -H [ IP|HOSTNAME ] -y SNMPCOMMUNITY -w Warning LOW Fan Speed  -c Critical LOW Fan Speed -W Warning HIGH Fan Speed -C Critical HIGH Fan Speed";
+    exit $STATE_UNKNOWN;
+}
+
+$PROGNAME = "check_barracuda_fans";
+
+#UNTATINTING STATE VARIABLES
+
+$STATE_CRITICAL = 2;
+if ($STATE_CRITICAL =~ /^([-\@\w.]+)$/) {
+        $STATE_CRITICAL = $1;                     # $data now untainted
+    } else {
+        die "Bad data in '$STATE_CRITICAL'";      # log this somewhere
+    }
+$STATE_WARNING = 1;
+if ($STATE_WARNING =~ /^([-\@\w.]+)$/) {
+        $STATE_WARNING = $1;                     # $data now untainted
+    } else {
+        die "Bad data in '$STATE_WARNING'";      # log this somewhere
+    }
+$STATE_UNKNOWN = 3;
+if ($STATE_UNKNOWN =~ /^([-\@\w.]+)$/) {
+        $STATE_UNKNOWN = $1;                     # $data now untainted
+    } else {
+        die "Bad data in '$STATE_UNKNOWN'";      # log this somewhere
+    }
+$STATE_OK = 0;
+if ($STATE_OK =~ /^([-\@\w.]+)$/) {
+        $STATE_OK = $1;                     # $data now untainted
+    } else {
+        die "Bad data in '$STATE_OK'";      # log this somewhere
+    }
+    
+#UNTAINTING USER VARIABLES
+
+$COMMUNITY = $opt_y;
+if ($COMMUNITY =~ /^([-\@\w.]+)$/) {
+        $COMMUNITY = $1;                     # $data now untainted
+    } else {
+        die "Bad data in '$COMMUNITY'";      # log this somewhere
+    }
+
+$IP = $opt_H;
+if ($IP =~ /^([-\@\w.]+)$/) {
+        $IP = $1;                     # $data now untainted
+    } else {
+        die "Bad data in '$IP'";      # log this somewhere
+    }
+    
+$lowwarning = $opt_w;
+if ($lowwarning =~ /(.*)/) {
+        $lowwarning = $1;                     # $data now untainted
+    } else {
+        die "Bad data in '$lowwarning'";      # log this somewhere
+    }
+    
+$lowcritical = $opt_c;
+if ($lowcritical =~ /(.*)/) {
+        $lowcritical = $1;                     # $data now untainted
+    } else {
+        die "Bad data in '$lowcritical'";      # log this somewhere
+    }
+    
+$warning = $opt_W;
+if ($warning =~ /(.*)/) {
+        $warning = $1;                     # $data now untainted
+    } else {
+        die "Bad data in '$warning'";      # log this somewhere
+    }
+    
+$critical = $opt_C;
+if ($critical =~ /(.*)/) {
+        $critical = $1;                     # $data now untainted
+    } else {
+        die "Bad data in '$critical'";      # log this somewhere
+    }
+
+# System Fan Speed Get and Untaint.
+$sysfan=`snmpwalk -v 2c -c $COMMUNITY $IP 1.3.6.1.4.1.20632.2.14`;
+if ($sysfan =~ m/(.*)/) {
+        $sysfan = $1;                     # $data now untainted
+    } else {
+        die "Bad data in '$sysfan'";      # log this somewhere
+    }
+chomp $sysfan;
+
+$cpufan=`snmpwalk -v 2c -c $COMMUNITY $IP 1.3.6.1.4.1.20632.2.15`;
+if ($cpufan =~ m/(.*)/) {
+        $cpufan = $1;                     # $data now untainted
+    } else {
+        die "Bad data in '$cpufan'";      # log this somewhere
+    }
+chomp $cpufan;
+
+#Extract relevant data from SNMP String returned
+
+@sysfan_arr = split(' ',$sysfan);
+@cpufan_arr = split(' ',$cpufan);
+$sysfanspeed = $sysfan_arr[-1];
+$cpufanspeed = $cpufan_arr[-1];
+
+# FILTER
+if ( $sysfan ) {
+     $sysfan =~s/SNMPv2-SMI::enterprises.20632.2.14 = INTEGER: //g;
+   }
+else {
+    print "Fan Status Unknown  : No response while querying for the SYSTEM Fan Speed on host $IP\n";
+    exit $STATE_UNKNOWN;
+}
+
+# FILTER
+if ( $cpufan ) {
+     $cpufan =~s/SNMPv2-SMI::enterprises.20632.2.15 = INTEGER: //g;
+   }
+else {
+    print "Fan Status Unknown  : No response while querying for the CPU Fan Speed on host $IP\n";
+    exit $STATE_UNKNOWN;
+}
+
+
+$OUTPUT="SYS Fan Speed: $sysfanspeed - CPU Fan Speed: $cpufanspeed|SYS-FAN=$sysfanspeed CPU-FAN=$cpufanspeed";
+
+if ( $cpufanspeed >= $critical or $cpufanspeed <= $lowcritical or $sysfanspeed >= $critical or $sysfanspeed <= $lowcritical ) {
+    print "FANS CRITICAL $OUTPUT\n";
+    exit $STATE_CRITICAL;
+    }
+if ( $cpufanspeed >= $warning or $cpufanspeed <= $lowwarning or $sysfanspeed >= $warning or $sysfanspeed <= $lowwarning ) {
+    print "FANS WARNING $OUTPUT\n";
+	exit $STATE_WARNING;
+   }
+else {
+    print "FANS OK $OUTPUT\n";
+    exit $STATE_OK;
+    }
