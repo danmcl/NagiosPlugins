@@ -18,3 +18,33 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+Usage Info:
+All recommended values are reasonable for *MY* environment. They may not be suitable for yours. 
+
+
+check_barracuda_fans
+check_barracuda_fans -H [ IP|HOSTNAME ] -y SNMPCOMMUNITY -w Warning LOW Fan Speed  -c Critical LOW Fan Speed -W Warning HIGH Fan Speed -C Critical HIGH Fan Speed
+*** RECOMMENDED VALUES IN ( ) ***
+-H = HOSTNAME/IP Address ($HOSTNAME$)
+-y = SNMP Community Name (public)
+-w = Low speed threshold for WARNING (2000)
+-c = Low speed threshold for CRITICAL (1000)
+-W = High speed threshold for WARNING (4000)
+-C = High speed threshold for CRITICAL (5000)
+
+check_barracuda_mailqueue
+check_barracuda_mailqueue -H [ IP|HOSTNAME ] -c SNMPCOMMUNITY -W Warning number of mail messages -C Critical number of mail messages
+*** RECOMMENDED VALUES IN ( ) ***
+-H = HOSTNAME/IP Address ($HOSTNAME$)
+-c = SNMP Community Name (public)
+-W = Threshold for WARNING for queued messages (10)
+-C = Threshold for CRITICAL for queued messages (25)
+
+check_barracuda_temp
+check_barracuda_temp -H [ IP|HOSTNAME ] -c SNMPCOMMUNITY -W Warning CPU Temp -C Critical CPU Temp
+*** RECOMMENDED VALUES IN ( ) ***
+-H = HOSTNAME/IP Address ($HOSTNAME$)
+-c = SNMP Community Name (public)
+-W = Threshold for WARNING for CPU Temp (40)
+-C = Threshold for CRITICAL for CPU Temp (50)
