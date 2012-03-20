@@ -4,6 +4,7 @@ import commands
 import sys
 from optparse import OptionParser
 import csv
+
 parser = OptionParser()
 parser.add_option("-H", "--host", dest="host",
                   help="Hostname/FQDN or IP address")
@@ -22,25 +23,33 @@ parser.add_option("-P", "--prefix", dest="prefix", default="None",
 parser.add_option("-r", "--raw", action="store_true", dest="raw", default=False,
                   help="Use raw values for Warning and Critical thresholds (affected by prefix used i.e.  -r -w 1000 -P kilo  will set Warning threshold to 1000 Kilobits/sec)")
 (options, args) = parser.parse_args()
+
 host=options.host
 port=str(options.port)
 special=str(options.special)
 disconnected=str(options.disconnected)
 prefix=str(options.prefix)
-warning=int(options.warning)
-critical=int(options.critical)
+warning=float(options.warning)
+critical=float(options.critical)
 raw=options.raw
 if prefix is "None":
 	divisor=1
+	prefixOutput=""
 elif prefix.upper()[0] is "K":
 	divisor=1000
+	prefixOutput=prefix.upper()[0]
 elif prefix.upper()[0] is "M":
 	divisor=1000**2
+	prefixOutput=prefix.upper()[0]
 elif prefix.upper()[0] is "G":
 	divisor=1000**3
+	prefixOutput=prefix.upper()[0]
 else:
 	print "Sorry you have entered "+prefix+", which is not a valid prefix, please use either Kilo/K, Mega/M, Giga/G"
 	exit(3)
+
+
+
 listInterfaces="/usr/local/nagios/libexec/check_nt -H "+host+" -p "+port+" -v INSTANCES -l \"Network Interface\""
 status, output = commands.getstatusoutput(listInterfaces)
 interfaces=output[21:].split(',')
@@ -57,37 +66,49 @@ for i in interfaces:
 	getInterfaceSent="/usr/local/nagios/libexec/check_nt -H "+host+" -p "+port+" -v COUNTER -l  \"\\\\Network Interface("+i+")\\\\Bytes Sent/sec\""
 	speedstatus, speed = commands.getstatusoutput(getInterfaceSpeed)
 	calcSpeed=float(speed)/divisor
-	prefixOutput=prefix.upper()[0]
-
+	if raw:
+		if int(calcSpeed)==0: #can't have devide by zero in the case where speed=0
+			warningThreshold=0
+			criticalThreshold=0
+		else: #even though using RAW, calculate threshold as percentage of interface throughput so logic below is significantly simpler
+			warningThreshold=(warning/calcSpeed)*100
+			criticalThreshold=(critical/calcSpeed)*100
+	else:
+		warningThreshold=float(warning)
+		criticalThreshold=float(critical)
 	if disconnected == "True":
 		readstatus, actualReadBytes = commands.getstatusoutput(getInterfaceRead)
 		sendstatus, actualSendBytes = commands.getstatusoutput(getInterfaceSent)
 		readBits=float(actualReadBytes)*8/divisor
 		sendBits=float(actualSendBytes)*8/divisor
-		print str(interfaceID)+": "+i+": Speed: "+str(calcSpeed)+prefixOutput+"b/s "+str(readBits)+prefixOutput+" rx, "+str(sendBits)+prefixOutput+" tx"
-		print int((readBits/calcSpeed)*100)
-		print int((sendBits/calcSpeed)*100)
-		if (int((readBits/calcSpeed)*100)) > critical or(int((sendBits/calcSpeed)*100)) > critical:
-			outputlist.append([2,str(readBits),str(sendBits)])
-		if (int((readBits/calcSpeed)*100)) > warning or(int((sendBits/calcSpeed)*100)) > warning:
-			outputlist.append([1,str(readBits),str(sendBits)])
-		if (int((readBits/calcSpeed)*100)) < warning and(int((sendBits/calcSpeed)*100)) < warning:
-			outputlist.append([0,str(readBits),str(sendBits)])
+		readPct=(readBits/calcSpeed)*100
+		sendPct=(sendBits/calcSpeed)*100
+		print str(interfaceID)+": "+i+": Speed: "+str(calcSpeed)+prefixOutput+"b/s "+str(readBits)+prefixOutput+"b/s rx, "+str(sendBits)+prefixOutput+"b/s tx"
+		if (readPct > criticalThreshold) or(sendPct > criticalThreshold): #Set status to 2 - critical
+			outputlist.append([2,str(interfaceID),str(i),str(readPct),str(readBits),str(sendPct),str(sendBits)])
+		elif (readPct > warningThreshold) or(sendPct > warningThreshold): #Set status to 1 - warning
+			outputlist.append([1,str(interfaceID),str(i),str(readPct),str(readBits),str(sendPct),str(sendBits)])
+		elif (readPct > warningThreshold) or(sendPct > warningThreshold): #Set status to 0 - OK
+			outputlist.append([0,str(interfaceID),str(i),str(readPct),str(readBits),str(sendPct),str(sendBits)])
+		else: #Set status to 3 - you've managed to do something weird
+			outputlist.append([3,str(interfaceID),str(i),str(readPct),str(readBits),str(sendPct),str(sendBits)])
 	
-	elif speed > "0":
+	elif speed > "0": #if Speed is 0 interface is classed as disconnected
 		readstatus, actualReadBytes = commands.getstatusoutput(getInterfaceRead)
 		sendstatus, actualSendBytes = commands.getstatusoutput(getInterfaceSent)
 		readBits=float(actualReadBytes)*8/divisor
 		sendBits=float(actualSendBytes)*8/divisor
-		print str(interfaceID)+": "+i+": Speed: "+str(calcSpeed)+prefixOutput+"b/s "+str(readBits)+prefixOutput+" rx, "+str(sendBits)+prefixOutput+" tx"
-		print int((readBits/calcSpeed)*100)
-		print int((sendBits/calcSpeed)*100)
-		if (int((readBits/calcSpeed)*100)) > critical or(int((sendBits/calcSpeed)*100)) > critical:
-			outputlist.append([2,str(readBits),str(sendBits)])
-		if (int((readBits/calcSpeed)*100)) > warning or(int((sendBits/calcSpeed)*100)) > warning:
-			outputlist.append([1,str(readBits),str(sendBits)])
-		if (int((readBits/calcSpeed)*100)) < warning and(int((sendBits/calcSpeed)*100)) < warning:
-			outputlist.append([0,str(readBits),str(sendBits)])
+		readPct=(readBits/calcSpeed)*100
+		sendPct=(sendBits/calcSpeed)*100
+		print str(interfaceID)+": "+i+": Speed: "+str(calcSpeed)+prefixOutput+"b/s "+str(readBits)+prefixOutput+"b/s rx, "+str(sendBits)+prefixOutput+"b/s tx"
+		if (readPct > criticalThreshold) or(sendPct > criticalThreshold):
+			outputlist.append([2,str(interfaceID),str(i),str(readPct),str(readBits),str(sendPct),str(sendBits)])
+		elif (readPct > warningThreshold) or(sendPct > warningThreshold):
+			outputlist.append([1,str(interfaceID),str(i),str(readPct),str(readBits),str(sendPct),str(sendBits)])
+		elif (readPct < warningThreshold) or(sendPct < warningThreshold):
+			outputlist.append([0,str(interfaceID),str(i),str(readPct),str(readBits),str(sendPct),str(sendBits)])
+		else:
+			outputlist.append([3,str(interfaceID),str(i),str(readPct),str(readBits),str(sendPct),str(sendBits)])
 	interfaceID+=1
 print outputlist
 exit()
