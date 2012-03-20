@@ -1,0 +1,31 @@
+#!/usr/bin/python
+import os
+import commands
+import sys
+from optparse import OptionParser
+import csv
+parser = OptionParser()
+parser.add_option("-H", "--host", dest="host",
+                  help="Hostname/FQDN or IP address")
+parser.add_option("-p", "--port", type="int", dest="port",default="1248",
+                  help="Port that nc_net or nsclient++ is running on (1248)")
+parser.add_option("-w", "--warning", dest="warning",
+                  help="Warning Threshold (percentage of interface speed)")
+parser.add_option("-c", "--critical", dest="critical",
+                  help="Critical Threshold (percentage of interface speed)")
+parser.add_option("-P", "--prefix", dest="prefix",
+                  help="Prefix to Be used Kilo/K, Mega/M, Giga/G, if none specified  bits/bytes will be used")
+(options, args) = parser.parse_args()
+host=options.host
+port=str(options.port)
+listInterfaces="/usr/local/nagios/libexec/check_nt -H "+host+" -p "+port+" -v INSTANCES -l \"Network Interface\""
+status, output = commands.getstatusoutput(listInterfaces)
+interfaces=output[21:].split(',')
+for i in interfaces:
+	getInterfaceRead="/usr/local/nagios/libexec/check_nt -H "+host+" -p "+port+" -v COUNTER -l  \"\\\\Network Interface("+i+")\\\\Bytes Received/sec\""
+	getInterfaceSent="/usr/local/nagios/libexec/check_nt -H "+host+" -p "+port+" -v COUNTER -l  \"\\\\Network Interface("+i+")\\\\Bytes Sent/sec\""
+	readstatus, readBytes = commands.getstatusoutput(getInterfaceRead)
+	sendstatus, sendBytes = commands.getstatusoutput(getInterfaceSent)
+	print i+": "+readBytes+"rx, "+sendBytes+"tx"
+exit()
+
