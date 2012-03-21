@@ -10,10 +10,10 @@ parser.add_option("-H", "--host", dest="host",
                   help="Hostname/FQDN or IP address")
 parser.add_option("-p", "--port", type="int", dest="port",default="1248",
                   help="Port that nc_net or nsclient++ is running on (1248)")
-parser.add_option("-w", "--warning", dest="warning", default=70,
-                  help="Warning Threshold (percentage of interface speed)")
-parser.add_option("-c", "--critical", dest="critical", default=90,
-                  help="Critical Threshold (percentage of interface speed)")
+parser.add_option("-w", "--warning", dest="warning", 
+                  help="Warning Threshold (percentage of interface speed default to 70 see also -r/--raw)")
+parser.add_option("-c", "--critical", dest="critical", 
+                  help="Critical Threshold (percentage of interface speed default to 90 see also -r/--raw)")
 parser.add_option("-S", "--special", action="store_true", dest="special", default=False,
                   help="Include special interfaces Teredo IPv6 tunnel and isatap")
 parser.add_option("-D", "--disconnected", action="store_true", dest="disconnected", default=False,
@@ -21,7 +21,9 @@ parser.add_option("-D", "--disconnected", action="store_true", dest="disconnecte
 parser.add_option("-P", "--prefix", dest="prefix", default="None",
                   help="Prefix to Be used Kilo/K, Mega/M, Giga/G, if none specified  bits/bytes will be used")
 parser.add_option("-r", "--raw", action="store_true", dest="raw", default=False,
-                  help="Use raw values for Warning and Critical thresholds (affected by prefix used i.e.  -r -w 1000 -P kilo  will set Warning threshold to 1000 Kilobits/sec)")
+                  help="Use raw values for Warning and Critical thresholds (affected by prefix used i.e.  -r -w 1000 -c 2000 -P kilo  will set Warning threshold to 1000 Kilobits/sec and Critical threshold to 2000 Kilobits/sec) ")
+parser.add_option("-R", "--rawperfdata", action="store_true", dest="rawperf", default=False,
+                  help="Use raw values for Performance Data thresholds (Can be used in combination with -r i.e. -r -R )")
 (options, args) = parser.parse_args()
 
 host=options.host
@@ -29,9 +31,23 @@ port=str(options.port)
 special=str(options.special)
 disconnected=str(options.disconnected)
 prefix=str(options.prefix)
-warning=float(options.warning)
-critical=float(options.critical)
 raw=options.raw
+if options.warning:
+	warning=float(options.warning)
+else:
+	if raw:
+		print "You have not specified a warning threshold but have specified using raw values. Please add -w <VALUE> to the command"
+		exit(3)
+	else:
+		warning=70
+if options.critical:
+	critical=float(options.critical)
+else:
+	if raw:
+		print "You have not specified a critical threshold but have specified using raw values. Please add -c <VALUE> to the command"
+		exit(3)
+	else:
+		critical=90
 if prefix is "None":
 	divisor=1
 	prefixOutput=""
@@ -70,30 +86,40 @@ for i in interfaces:
 		if int(calcSpeed)==0: #can't have devide by zero in the case where speed=0
 			warningThreshold=0
 			criticalThreshold=0
+			warningThresholdRaw=warning/divisor
+			criticalThresholdRaw=critical/divisor
 		else: #even though using RAW, calculate threshold as percentage of interface throughput so logic below is significantly simpler
 			warningThreshold=(warning/calcSpeed)*100
 			criticalThreshold=(critical/calcSpeed)*100
+			warningThresholdRaw=warning/divisor
+			criticalThresholdRaw=critical/divisor
 	else:
 		warningThreshold=float(warning)
 		criticalThreshold=float(critical)
+		warningThresholdRaw=(warning/100)*calcSpeed
+		criticalThresholdRaw=(critical/100)*calcSpeed
 	if disconnected == "True":
 		readstatus, actualReadBytes = commands.getstatusoutput(getInterfaceRead)
 		sendstatus, actualSendBytes = commands.getstatusoutput(getInterfaceSent)
 		readBits=float(actualReadBytes)*8/divisor
 		sendBits=float(actualSendBytes)*8/divisor
-		readPct=(readBits/calcSpeed)*100
-		sendPct=(sendBits/calcSpeed)*100
+		if calcSpeed>0:
+			readPct=(readBits/calcSpeed)*100
+			sendPct=(sendBits/calcSpeed)*100
+	 	else:
+			readPct=0 #Can't div by zero but interface can't send traffic whilst disconnected either.
+			sendPct=0
 		print str(interfaceID)+": "+i+": Speed: "+str(calcSpeed)+prefixOutput+"b/s "+str(readBits)+prefixOutput+"b/s rx, "+str(sendBits)+prefixOutput+"b/s tx"
 		if (readPct > criticalThreshold) or(sendPct > criticalThreshold): #Set status to 2 - critical
-			outputlist.append([2,str(interfaceID),str(i),str(readPct),str(readBits),str(sendPct),str(sendBits)])
+			outputlist.append([2,str(interfaceID),str(i),str(readPct),str(readBits),str(sendPct),str(sendBits),str(warningThresholdRaw),str(criticalThresholdRaw)])
 		elif (readPct > warningThreshold) or(sendPct > warningThreshold): #Set status to 1 - warning
-			outputlist.append([1,str(interfaceID),str(i),str(readPct),str(readBits),str(sendPct),str(sendBits)])
-		elif (readPct > warningThreshold) or(sendPct > warningThreshold): #Set status to 0 - OK
-			outputlist.append([0,str(interfaceID),str(i),str(readPct),str(readBits),str(sendPct),str(sendBits)])
+			outputlist.append([1,str(interfaceID),str(i),str(readPct),str(readBits),str(sendPct),str(sendBits),str(warningThresholdRaw),str(criticalThresholdRaw)])
+		elif (readPct <= warningThreshold) or(sendPct <= warningThreshold): #Set status to 0 - OK
+			outputlist.append([0,str(interfaceID),str(i),str(readPct),str(readBits),str(sendPct),str(sendBits),str(warningThresholdRaw),str(criticalThresholdRaw)])
 		else: #Set status to 3 - you've managed to do something weird
-			outputlist.append([3,str(interfaceID),str(i),str(readPct),str(readBits),str(sendPct),str(sendBits)])
+			outputlist.append([3,str(interfaceID),str(i),str(readPct),str(readBits),str(sendPct),str(sendBits),str(warningThresholdRaw),str(criticalThresholdRaw)])
 	
-	elif speed > "0": #if Speed is 0 interface is classed as disconnected
+	elif speed > "0": #if Speed is 0 interface is classed as disconnected so where speed > 0 interface is active. This may only be the case for autonegotiation.
 		readstatus, actualReadBytes = commands.getstatusoutput(getInterfaceRead)
 		sendstatus, actualSendBytes = commands.getstatusoutput(getInterfaceSent)
 		readBits=float(actualReadBytes)*8/divisor
@@ -102,14 +128,18 @@ for i in interfaces:
 		sendPct=(sendBits/calcSpeed)*100
 		print str(interfaceID)+": "+i+": Speed: "+str(calcSpeed)+prefixOutput+"b/s "+str(readBits)+prefixOutput+"b/s rx, "+str(sendBits)+prefixOutput+"b/s tx"
 		if (readPct > criticalThreshold) or(sendPct > criticalThreshold):
-			outputlist.append([2,str(interfaceID),str(i),str(readPct),str(readBits),str(sendPct),str(sendBits)])
+			outputlist.append([2,str(interfaceID),str(i),str(readPct),str(readBits),str(sendPct),str(sendBits),str(warningThresholdRaw),str(criticalThresholdRaw)])
 		elif (readPct > warningThreshold) or(sendPct > warningThreshold):
-			outputlist.append([1,str(interfaceID),str(i),str(readPct),str(readBits),str(sendPct),str(sendBits)])
+			outputlist.append([1,str(interfaceID),str(i),str(readPct),str(readBits),str(sendPct),str(sendBits),str(warningThresholdRaw),str(criticalThresholdRaw)])
 		elif (readPct < warningThreshold) or(sendPct < warningThreshold):
-			outputlist.append([0,str(interfaceID),str(i),str(readPct),str(readBits),str(sendPct),str(sendBits)])
+			outputlist.append([0,str(interfaceID),str(i),str(readPct),str(readBits),str(sendPct),str(sendBits),str(warningThresholdRaw),str(criticalThresholdRaw)])
 		else:
-			outputlist.append([3,str(interfaceID),str(i),str(readPct),str(readBits),str(sendPct),str(sendBits)])
+			outputlist.append([3,str(interfaceID),str(i),str(readPct),str(readBits),str(sendPct),str(sendBits),str(warningThresholdRaw),str(criticalThresholdRaw)])
 	interfaceID+=1
 print outputlist
+outputlistindex=0
+for objects in outputlist:
+	outputlist[outputlistindex][0]
+	outputlistindex=+1
 exit()
 
