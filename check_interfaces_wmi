@@ -171,7 +171,7 @@ if rawperf:
 			prefixLetter=""
 		else:
 			prefixLetter=prefix
-		RawPerfdata="\"Interface "+interfaceID+" RX\";"+valueread+prefixLetter+"B;"+warning+";"+critical+"; "+"\"Interface "+interfaceID+" TX\";"+valuesend+prefixLetter+"B;"+warning+";"+critical+";"
+		RawPerfdata="\'Interface "+interfaceID+" RX\'="+valueread+prefixLetter+"B;"+warning+";"+critical+" "+"\'Interface "+interfaceID+" TX\'="+valuesend+prefixLetter+"B;"+warning+";"+critical
 		pluginoutput=pluginoutput+RawPerfdata
 		objectindex=objectindex+1
 else:
@@ -181,7 +181,7 @@ else:
 		valuesend=str(outputlist[objectindex][5])
 		warning=str(warningThreshold)
 		critical=str(criticalThreshold)
-		RawPerfdata="\"Interface "+interfaceID+" RX\";"+valueread+"%;"+warning+";"+critical+"; "+"\"Interface "+interfaceID+" TX\";"+valuesend+"%;"+warning+";"+critical+";"
+		RawPerfdata="\'Interface "+interfaceID+" RX\'="+valueread+"%;"+warning+";"+critical+" "+"\'Interface "+interfaceID+" TX\'="+valuesend+"%;"+warning+";"+critical
 		pluginoutput=pluginoutput+RawPerfdata
 		objectindex=objectindex+1
 print pluginoutput
