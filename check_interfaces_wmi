@@ -32,6 +32,7 @@ special=str(options.special)
 disconnected=str(options.disconnected)
 prefix=str(options.prefix)
 raw=options.raw
+rawperf=options.rawperf
 if options.warning:
 	warning=float(options.warning)
 else:
@@ -109,7 +110,7 @@ for i in interfaces:
 	 	else:
 			readPct=0 #Can't div by zero but interface can't send traffic whilst disconnected either.
 			sendPct=0
-		print str(interfaceID)+": "+i+": Speed: "+str(calcSpeed)+prefixOutput+"b/s "+str(readBits)+prefixOutput+"b/s rx, "+str(sendBits)+prefixOutput+"b/s tx"
+		#print str(interfaceID)+": "+i+": Speed: "+str(calcSpeed)+prefixOutput+"b/s "+str(readBits)+prefixOutput+"b/s rx, "+str(sendBits)+prefixOutput+"b/s tx"
 		if (readPct > criticalThreshold) or(sendPct > criticalThreshold): #Set status to 2 - critical
 			outputlist.append([2,str(interfaceID),str(i),str(readPct),str(readBits),str(sendPct),str(sendBits),str(warningThresholdRaw),str(criticalThresholdRaw)])
 		elif (readPct > warningThreshold) or(sendPct > warningThreshold): #Set status to 1 - warning
@@ -126,7 +127,7 @@ for i in interfaces:
 		sendBits=float(actualSendBytes)*8/divisor
 		readPct=(readBits/calcSpeed)*100
 		sendPct=(sendBits/calcSpeed)*100
-		print str(interfaceID)+": "+i+": Speed: "+str(calcSpeed)+prefixOutput+"b/s "+str(readBits)+prefixOutput+"b/s rx, "+str(sendBits)+prefixOutput+"b/s tx"
+		#print str(interfaceID)+": "+i+": Speed: "+str(calcSpeed)+prefixOutput+"b/s "+str(readBits)+prefixOutput+"b/s rx, "+str(sendBits)+prefixOutput+"b/s tx"
 		if (readPct > criticalThreshold) or(sendPct > criticalThreshold):
 			outputlist.append([2,str(interfaceID),str(i),str(readPct),str(readBits),str(sendPct),str(sendBits),str(warningThresholdRaw),str(criticalThresholdRaw)])
 		elif (readPct > warningThreshold) or(sendPct > warningThreshold):
@@ -136,10 +137,52 @@ for i in interfaces:
 		else:
 			outputlist.append([3,str(interfaceID),str(i),str(readPct),str(readBits),str(sendPct),str(sendBits),str(warningThresholdRaw),str(criticalThresholdRaw)])
 	interfaceID+=1
-print outputlist
+#print outputlist
 outputlistindex=0
+statusCode=0
 for objects in outputlist:
-	outputlist[outputlistindex][0]
+	#print outputlistindex
+	interface=outputlist[outputlistindex][1]
+	status=outputlist[outputlistindex][0]
+	if status>0:
+		statusCode=status
 	outputlistindex=+1
-exit()
-
+if statusCode > 0:
+	if statusCode==1:
+		statusType="WARNING"
+	elif statusCode==2:
+		statusType="CRITICAL"
+	elif statusCode==3:
+		statusType="UNKNOWN"
+	pluginoutput="Interface "+interface+" "+statusType+"|"
+else:
+	pluginoutput="All Interfaces OK|"
+#print pluginoutput
+#print "----------------SEPARATOR-----------------"
+objectindex=0
+if rawperf:
+	for objects in outputlist:
+		interfaceID=str(outputlist[objectindex][1])
+		valueread=str(outputlist[objectindex][4])
+		valuesend=str(outputlist[objectindex][6])
+		warning=str(outputlist[objectindex][7])
+		critical=str(outputlist[objectindex][8])
+		if prefix=="None":
+			prefixLetter=""
+		else:
+			prefixLetter=prefix
+		RawPerfdata="\"Interface "+interfaceID+" RX\";"+valueread+prefixLetter+"B;"+warning+";"+critical+"; "+"\"Interface "+interfaceID+" TX\";"+valuesend+prefixLetter+"B;"+warning+";"+critical+";"
+		pluginoutput=pluginoutput+RawPerfdata
+		objectindex=objectindex+1
+else:
+	for objects in outputlist:
+		interfaceID=str(outputlist[objectindex][1])
+		valueread=str(outputlist[objectindex][3])
+		valuesend=str(outputlist[objectindex][5])
+		warning=str(warningThreshold)
+		critical=str(criticalThreshold)
+		RawPerfdata="\"Interface "+interfaceID+" RX\";"+valueread+"%;"+warning+";"+critical+"; "+"\"Interface "+interfaceID+" TX\";"+valuesend+"%;"+warning+";"+critical+";"
+		pluginoutput=pluginoutput+RawPerfdata
+		objectindex=objectindex+1
+print pluginoutput
+exit(statusCode)
