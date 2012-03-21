@@ -14,12 +14,12 @@ parser.add_option("-w", "--warning", dest="warning",
                   help="Warning Threshold (percentage of interface speed default to 70 see also -r/--raw)")
 parser.add_option("-c", "--critical", dest="critical", 
                   help="Critical Threshold (percentage of interface speed default to 90 see also -r/--raw)")
+parser.add_option("-P", "--prefix", dest="prefix", default="None",
+                  help="Prefix to Be used Kilo/K, Mega/M, Giga/G, if none specified  bits/bytes will be used")
 parser.add_option("-S", "--special", action="store_true", dest="special", default=False,
                   help="Include special interfaces Teredo IPv6 tunnel and isatap")
 parser.add_option("-D", "--disconnected", action="store_true", dest="disconnected", default=False,
                   help="Include disconnected interfaces (interface speed = 0)")
-parser.add_option("-P", "--prefix", dest="prefix", default="None",
-                  help="Prefix to Be used Kilo/K, Mega/M, Giga/G, if none specified  bits/bytes will be used")
 parser.add_option("-r", "--raw", action="store_true", dest="raw", default=False,
                   help="Use raw values for Warning and Critical thresholds (affected by prefix used i.e.  -r -w 1000 -c 2000 -P kilo  will set Warning threshold to 1000 Kilobits/sec and Critical threshold to 2000 Kilobits/sec) ")
 parser.add_option("-R", "--rawperfdata", action="store_true", dest="rawperf", default=False,
